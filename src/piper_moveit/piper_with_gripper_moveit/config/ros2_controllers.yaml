@@ -2,9 +2,8 @@
 controller_manager:
   ros__parameters:
     update_rate: 200  # Hz
-    use_sim_time: true
-    
-    arm_controller:	
+
+    arm_controller:
       type: joint_trajectory_controller/JointTrajectoryController
 
 

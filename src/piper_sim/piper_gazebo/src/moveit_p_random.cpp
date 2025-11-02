@@ -2,9 +2,6 @@
 #include <rclcpp/rclcpp.hpp>
 #include <moveit/move_group_interface/move_group_interface.h>
 #include <sensor_msgs/msg/joint_state.hpp>
-#include <moveit/robot_state/robot_state.h>
-#include <Eigen/Geometry>
-#include <tf2/LinearMath/Matrix3x3.h>
 #include <vector>
 #include <fstream>
 #include <typeinfo>
@@ -38,8 +35,8 @@ int main(int argc, char *argv[])
     // MoveGroup
     moveit::planning_interface::MoveGroupInterface move_group(node, "arm");
     moveit::planning_interface::MoveGroupInterface gripper_group(node,"gripper");
-    move_group.setGoalPositionTolerance(0.01);
-    move_group.setGoalOrientationTolerance(0.01);
+    move_group.setGoalPositionTolerance(0.02);
+    move_group.setGoalOrientationTolerance(0.05);
     move_group.setMaxVelocityScalingFactor(0.5);
     move_group.setMaxAccelerationScalingFactor(0.5);
     move_group.setPlannerId("RRTConnect");
@@ -57,35 +54,9 @@ int main(int argc, char *argv[])
                 start_pose.pose.orientation.z,
                 start_pose.pose.orientation.w);
 
-    // // 设置目标位姿
-    // double r = 0;
-    // double p = 3.14;
-    // double y = 0;
-    // tf2::Quaternion q;
-    // q.setRPY(r,p,y);
-    // geometry_msgs::msg::Quaternion q_msg = tf2::toMsg(q);
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    std::uniform_real_distribution<double> dist_x(0.1,0.4);
-    std::uniform_real_distribution<double> dist_y(-0.3,0.3);
-    
     geometry_msgs::msg::Pose target_pose;
-    target_pose.position.x = dist_x(gen);
-    target_pose.position.y = dist_y(gen);
-    target_pose.position.z = 0.155;
-    target_pose.orientation.x = 0;
-    target_pose.orientation.y = 1;
-    target_pose.orientation.z = 0;
-    target_pose.orientation.w = 0;
-    RCLCPP_INFO(logger, "目标点末端位姿: x=%.6f, y=%.6f, z=%.6f, ox=%.6f, oy=%.6f, oz=%.6f, ow=%.6f",
-                    target_pose.position.x,
-                    target_pose.position.y,
-                    target_pose.position.z,
-                    target_pose.orientation.x,
-                    target_pose.orientation.y,
-                    target_pose.orientation.z,
-                    target_pose.orientation.w);
-    move_group.setPoseTarget(target_pose);
+    move_group.setRandomTarget();
+    // move_group.setPoseTarget(target_pose);
 
     // 记录 /joint_states
     bool record_flag = false;
@@ -111,36 +82,32 @@ int main(int argc, char *argv[])
         // 开始记录
         record_flag = true;
         gripper_group.setNamedTarget("open");
-        moveit::planning_interface::MoveGroupInterface::Plan plan1;
-        moveit::core::MoveItErrorCode success1 = gripper_group.plan(plan1);
-        if (success1)
-            gripper_group.execute(plan1);
+        gripper_group.move();
         move_group.execute(plan);
+        target_pose = move_group.getCurrentPose().pose;
+        RCLCPP_INFO(logger, "目标点末端位姿: x=%.6f, y=%.6f, z=%.6f, ox=%.6f, oy=%.6f, oz=%.6f, ow=%.6f",
+                target_pose.position.x,
+                target_pose.position.y,
+                target_pose.position.z,
+                target_pose.orientation.x,
+                target_pose.orientation.y,
+                target_pose.orientation.z,
+                target_pose.orientation.w);
         gripper_group.setNamedTarget("close");
-        moveit::planning_interface::MoveGroupInterface::Plan plan2;
-        moveit::core::MoveItErrorCode success2 = gripper_group.plan(plan2);
-        if (success2)
-            gripper_group.execute(plan2);
-        move_group.setNamedTarget("zero");
-        move_group.move();
+        gripper_group.move();
         // 执行完成，停止记录
         record_flag = false;
 
-        // 固定的关节顺序
-        std::vector<std::string> joint_order = {
-            "joint1", "joint2", "joint3", "joint4",
-            "joint5", "joint6", "joint7", "joint8"
-        };
-
-        // 保存 joint_states 到 ~/piper_ros/data/
+        // 保存 joint_states 到 ~/piper_ros/data/ 带时间戳的 CSV
         if (!joint_state_log.empty())
         {
+            // 1) 目录：~/piper_ros/data
             const char* home = std::getenv("HOME");
             std::filesystem::path out_dir = (home ? std::filesystem::path(home) : std::filesystem::path(".")) / "piper_ros" / "data";
             std::error_code ec;
             std::filesystem::create_directories(out_dir, ec);
 
-            // 时间戳文件名
+            // 2) 文件名：joint_states_YYYY-MM-DD_HH-MM-SS.csv
             auto now = std::chrono::system_clock::now();
             std::time_t tt = std::chrono::system_clock::to_time_t(now);
             std::tm tm {};
@@ -151,47 +118,35 @@ int main(int argc, char *argv[])
             std::string fname = "joint_states_" + ts.str() + ".csv";
             std::filesystem::path fullpath = out_dir / fname;
 
+            // 3) 写入 CSV 文件
             std::ofstream file(fullpath);
             file << "time";
-            for (const auto &n : joint_order) file << "," << n << "_pos";
-            for (const auto &n : joint_order) file << "," << n << "_vel";
-            file << ",ee_x,ee_y,ee_z,ee_qx,ee_qy,ee_qz,ee_qw\n";
+            for (const auto &name : joint_state_log.front().name)
+                file << "," << name << "_pos";
+            for (const auto &name : joint_state_log.front().name)
+                file << "," << name << "_vel";
+            file << "\n";
 
             for (const auto &js : joint_state_log)
             {
                 const double t = js.header.stamp.sec + js.header.stamp.nanosec * 1e-9;
                 file << std::fixed << std::setprecision(9) << t;
 
-                // 映射 joint_name → 值
-                std::unordered_map<std::string, double> pos_map, vel_map;
-                for (size_t i = 0; i < js.name.size(); ++i) {
-                    pos_map[js.name[i]] = js.position[i];
-                    if (i < js.velocity.size()) vel_map[js.name[i]] = js.velocity[i];
+                // position
+                for (const auto &pos : js.position)
+                    file << "," << std::setprecision(9) << pos;
+                // velocity
+                if (js.velocity.size() == js.name.size()) {
+                    for (const auto &vel : js.velocity)
+                        file << "," << std::setprecision(9) << vel;
+                } else {
+                    for (size_t i = 0; i < js.name.size(); ++i)
+                        file << ",0.0";  // 若无velocity则补0
                 }
-
-                // 按固定顺序写入
-                for (const auto &n : joint_order) {
-                    double v = pos_map.count(n) ? pos_map[n] : 0.0;
-                    file << "," << std::setprecision(9) << v;
-                }
-                for (const auto &n : joint_order) {
-                    double v = vel_map.count(n) ? vel_map[n] : 0.0;
-                    file << "," << std::setprecision(9) << v;
-                }
-                // 计算当前末端位姿（正向运动学）
-                moveit::core::RobotState kinematic_state(move_group.getRobotModel());
-                kinematic_state.setVariablePositions(js.name, js.position);
-                const Eigen::Isometry3d& ee_pose = kinematic_state.getGlobalLinkTransform(move_group.getEndEffectorLink());
-
-                Eigen::Vector3d pos = ee_pose.translation();
-                Eigen::Quaterniond q(ee_pose.rotation());
-
-                file << "," << pos.x() << "," << pos.y() << "," << pos.z()
-                    << "," << q.x() << "," << q.y() << "," << q.z() << "," << q.w();
                 file << "\n";
             }
 
-            // 追加目标位姿
+            //  文件末尾追加 target_pose
             file << "# target_pose,"
                 << std::fixed << std::setprecision(6)
                 << target_pose.position.x << ","
@@ -209,13 +164,13 @@ int main(int argc, char *argv[])
         {
             RCLCPP_WARN(logger, "joint_state_log 为空，未保存数据");
         }
-
     }
     else
     {
         RCLCPP_WARN(logger, "OMPL 规划失败");
     }
-
+    move_group.setNamedTarget("zero");
+    move_group.move();
 
     rclcpp::shutdown();
     spin_thread.join();

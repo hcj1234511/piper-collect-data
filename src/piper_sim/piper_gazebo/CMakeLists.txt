@@ -21,18 +21,25 @@ find_package(rclcpp REQUIRED)
 find_package(moveit_ros_planning_interface REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
+find_package(tf2 REQUIRED)
+find_package(tf2_geometry_msgs REQUIRED)
 # uncomment the following section in order to fill in
 # further dependencies manually.
 # find_package(<dependency> REQUIRED)
 add_executable(moveit_p src/moveit_p.cpp)
 add_executable(moveit_j src/moveit_j.cpp)
 add_executable(get_current_pose src/get_current_pose.cpp)
+add_executable(moveit_key src/moveit_key.cpp)
+add_executable(moveit_p_random src/moveit_p_random.cpp)
+
 
 ament_target_dependencies(moveit_p
   rclcpp
   moveit_ros_planning_interface
   geometry_msgs
   sensor_msgs
+  tf2
+  tf2_geometry_msgs
 )
 ament_target_dependencies(moveit_j
   rclcpp
@@ -46,16 +53,21 @@ ament_target_dependencies(get_current_pose
   geometry_msgs
   sensor_msgs
 )
-
-
-install(TARGETS moveit_p
-  DESTINATION lib/${PROJECT_NAME}
+ament_target_dependencies(moveit_key
+  rclcpp
+  moveit_ros_planning_interface
+  geometry_msgs
+  sensor_msgs
+  tf2
+  tf2_geometry_msgs
 )
-install(TARGETS moveit_j
-  DESTINATION lib/${PROJECT_NAME}
-)
-install(TARGETS get_current_pose
-  DESTINATION lib/${PROJECT_NAME}
+ament_target_dependencies(moveit_p_random
+  rclcpp
+  moveit_ros_planning_interface
+  geometry_msgs
+  sensor_msgs
+  tf2
+  tf2_geometry_msgs
 )
 
 install(
@@ -65,6 +77,26 @@ install(
 install(
   PROGRAMS scripts/joint8_ctrl.py
   DESTINATION lib/${PROJECT_NAME}
+)
+install(
+  TARGETS moveit_p 
+  RUNTIME DESTINATION lib/${PROJECT_NAME}
+)  
+install(
+  TARGETS get_current_pose 
+  RUNTIME DESTINATION lib/${PROJECT_NAME}
+)
+install(
+  TARGETS moveit_j 
+  RUNTIME DESTINATION lib/${PROJECT_NAME}
+)
+install(
+  TARGETS moveit_key 
+  RUNTIME DESTINATION lib/${PROJECT_NAME}
+)
+install(
+  TARGETS moveit_p_random 
+  RUNTIME DESTINATION lib/${PROJECT_NAME}
 )
 
 if(BUILD_TESTING)

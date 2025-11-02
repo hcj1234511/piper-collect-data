@@ -1,0 +1,67 @@
+<?xml version="1.0" ?>
+<sdf version="1.6">
+  <model name="cube1">
+    <!-- 放置到地面上方，刚好接触：0.04/2 = 0.02 -->
+    <pose>0 0 0.02 0 0 0</pose>
+    <static>false</static>
+
+    <link name="link">
+      <!-- 适当增加质量，仿真更稳（0.3~1.0 都可） -->
+      <inertial>
+        <mass>0.5</mass>
+        <!-- I = 1/6 * m * a^2,  a = 0.04 -->
+        <inertia>
+          <ixx>5.333333e-05</ixx>  <!-- (1/6)*0.5*0.04^2 -->
+          <iyy>5.333333e-05</iyy>
+          <izz>5.333333e-05</izz>
+          <ixy>0</ixy><ixz>0</ixz><iyz>0</iyz>
+        </inertia>
+      </inertial>
+
+      <collision name="collision">
+        <geometry>
+          <box><size>0.04 0.04 0.04</size></box>
+        </geometry>
+        <surface>
+          <friction>
+            <ode>
+              <!-- 提高摩擦，减小滑出概率 -->
+              <mu>1.5</mu>
+              <mu2>1.5</mu2>
+              <!-- 轻微滑移有助于数值稳定（可选） -->
+              <slip1>0.0</slip1>
+              <slip2>0.0</slip2>
+            </ode>
+          </friction>
+          <contact>
+            <ode>
+              <!-- 接触刚度/阻尼，避免深穿透后强力反弹 -->
+              <kp>100000.0</kp>
+              <kd>1.0</kd>
+              <!-- 限制求解时接触修正速度 & 最小穿透深度 -->
+              <max_vel>0.1</max_vel>
+              <min_depth>0.001</min_depth>
+            </ode>
+          </contact>
+          <!-- 避免弹跳 -->
+          <bounce>
+            <restitution_coefficient>0.0</restitution_coefficient>
+            <threshold>1e6</threshold>
+          </bounce>
+        </surface>
+      </collision>
+
+      <visual name="visual">
+        <geometry>
+          <box><size>0.04 0.04 0.04</size></box>
+        </geometry>
+        <material>
+          <ambient>1 0.6 0.2 1</ambient>
+          <diffuse>1 0.6 0.2 1</diffuse>
+          <specular>0.1 0.1 0.1 1</specular>
+        </material>
+      </visual>
+    </link>
+  </model>
+</sdf>
+
