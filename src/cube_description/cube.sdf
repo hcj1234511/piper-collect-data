@@ -1,19 +1,18 @@
 <?xml version="1.0" ?>
 <sdf version="1.6">
   <model name="cube1">
-    <!-- 放置到地面上方，刚好接触：0.04/2 = 0.02 -->
-    <pose>0 0 0.02 0 0 0</pose>
+    <pose>0 0 0.02 0 0 0</pose>   <!-- 0.04/2 = 0.02，刚好落地 -->
     <static>false</static>
+    <allow_auto_disable>false</allow_auto_disable>  <!-- ★ 重要：不要自动睡眠 -->
 
     <link name="link">
-      <!-- 适当增加质量，仿真更稳（0.3~1.0 都可） -->
       <inertial>
         <mass>0.5</mass>
-        <!-- I = 1/6 * m * a^2,  a = 0.04 -->
+        <!-- ★ 实心立方体 I = 1/6 m a^2 = 1.333333e-04 -->
         <inertia>
-          <ixx>5.333333e-05</ixx>  <!-- (1/6)*0.5*0.04^2 -->
-          <iyy>5.333333e-05</iyy>
-          <izz>5.333333e-05</izz>
+          <ixx>1.333333e-04</ixx>
+          <iyy>1.333333e-04</iyy>
+          <izz>1.333333e-04</izz>
           <ixy>0</ixy><ixz>0</ixz><iyz>0</iyz>
         </inertia>
       </inertial>
@@ -25,25 +24,23 @@
         <surface>
           <friction>
             <ode>
-              <!-- 提高摩擦，减小滑出概率 -->
-              <mu>1.5</mu>
-              <mu2>1.5</mu2>
-              <!-- 轻微滑移有助于数值稳定（可选） -->
+              <!-- ★ 摩擦稍大些，便于两指稳定夹住 -->
+              <mu>2.0</mu>
+              <mu2>2.0</mu2>
               <slip1>0.0</slip1>
               <slip2>0.0</slip2>
             </ode>
           </friction>
           <contact>
             <ode>
-              <!-- 接触刚度/阻尼，避免深穿透后强力反弹 -->
+              <!-- ★ 接触刚度/阻尼：适中、别太弹 -->
               <kp>100000.0</kp>
               <kd>1.0</kd>
-              <!-- 限制求解时接触修正速度 & 最小穿透深度 -->
-              <max_vel>0.1</max_vel>
-              <min_depth>0.001</min_depth>
+              <!-- ★ 求解修正速度、最小穿透：更容易有“实打实的接触” -->
+              <max_vel>0.05</max_vel>
+              <min_depth>0.002</min_depth>
             </ode>
           </contact>
-          <!-- 避免弹跳 -->
           <bounce>
             <restitution_coefficient>0.0</restitution_coefficient>
             <threshold>1e6</threshold>
@@ -64,4 +61,3 @@
     </link>
   </model>
 </sdf>
-

@@ -4,9 +4,9 @@
 import argparse
 import rclpy
 from rclpy.node import Node
-from geometry_msgs.msg import Pose, Point, Quaternion
+from geometry_msgs.msg import Pose, Point, Quaternion, PointStamped
 from gazebo_msgs.srv import SpawnEntity, DeleteEntity
-import math, os
+import math, os, random, time
 
 # ====== 在这里写明 SDF 文件地址 ======
 # 默认取脚本同目录下的 cube.sdf，你也可以改成绝对路径，比如："/home/xxx/models/cube.sdf"
@@ -31,6 +31,8 @@ class Spawner(Node):
         super().__init__('sdf_spawner')
         self.spawn_cli = self.create_client(SpawnEntity, '/spawn_entity')
         self.del_cli   = self.create_client(DeleteEntity, '/delete_entity')
+        # 创建发布器，用于发布物体位置信息
+        self.position_pub = self.create_publisher(PointStamped, '/cube_position', 10)
 
     def wait(self):
         if not self.spawn_cli.wait_for_service(timeout_sec=10.0):
@@ -66,6 +68,7 @@ def main():
     ap.add_argument('--pitch', type=float, default=0.0)
     ap.add_argument('--yaw',   type=float, default=0.0)
     ap.add_argument('--replace', action='store_true', help='若指定 --name 且重名则先删除再生成')
+    ap.add_argument('--random', action='store_true', help='启用随机坐标：x在[0,0.4]，y在[-0.3,0.3]')
     args = ap.parse_args()
 
     if not os.path.isfile(SDF_PATH):
@@ -82,9 +85,39 @@ def main():
         # 位姿
         pose = Pose()
         pose.position = Point()
-        pose.position.x = args.x
-        pose.position.y = args.y
-        pose.position.z = args.z
+        # 如果启用随机模式，在指定范围内生成随机坐标
+        if args.random:
+            pose.position.x = random.uniform(0.0, 0.4)
+            pose.position.y = random.uniform(-0.3, 0.3)
+            pose.position.z = args.z  # 确保 z 值已赋值
+            node.get_logger().info(f'随机坐标：x={pose.position.x:.3f}, y={pose.position.y:.3f}, z={pose.position.z:.3f}')
+            
+            # 发布位置信息到 topic
+            position_msg = PointStamped()
+            position_msg.header.stamp = node.get_clock().now().to_msg()
+            position_msg.header.frame_id = 'world'
+            position_msg.point.x = pose.position.x
+            position_msg.point.y = pose.position.y
+            position_msg.point.z = pose.position.z
+            # 等待发布器准备好
+            time.sleep(0.1)  # 短暂延迟确保发布器已连接
+            node.position_pub.publish(position_msg)
+            node.get_logger().info(f'已发布位置信息到 /cube_position topic: x={pose.position.x:.3f}, y={pose.position.y:.3f}, z={pose.position.z:.3f}')
+            
+            # 同时设置 ROS 参数，供 moveit_p.cpp 读取
+            node.declare_parameter('cube_x', pose.position.x)
+            node.declare_parameter('cube_y', pose.position.y)
+            node.declare_parameter('cube_z', pose.position.z)
+            node.set_parameters([
+                rclpy.parameter.Parameter('cube_x', rclpy.parameter.Parameter.Type.DOUBLE, pose.position.x),
+                rclpy.parameter.Parameter('cube_y', rclpy.parameter.Parameter.Type.DOUBLE, pose.position.y),
+                rclpy.parameter.Parameter('cube_z', rclpy.parameter.Parameter.Type.DOUBLE, pose.position.z)
+            ])
+            node.get_logger().info(f'已设置 ROS 参数: cube_x={pose.position.x:.3f}, cube_y={pose.position.y:.3f}, cube_z={pose.position.z:.3f}')
+        else:
+            pose.position.x = args.x
+            pose.position.y = args.y
+            pose.position.z = args.z
         pose.orientation = rpy_to_quat(args.roll, args.pitch, args.yaw)
 
         # 1) 用户给了固定名字
